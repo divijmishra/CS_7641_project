@@ -1,10 +1,11 @@
 #!/usr/bin/bash
 
-# After loading onto the server with VS Code SSH, run the following commands:
-
 # To use a different GPU: change "V100-32GB" to the appropriate name as per
 # https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042096 
 # To change the time required, change t01:00:00 to tHH:MM:SS
+
+# can also run the bash file with arguments to change GPU and number of hours, e.g.
+# bash init_pace.sh -g V100-16GB -h 2    (this change GPU to V100-16GB and requests access for 2 hours)
 
 gpu=V100-32GB
 hours=4
