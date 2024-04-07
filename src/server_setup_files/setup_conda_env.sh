@@ -15,5 +15,8 @@ mamba install -y -c conda-forge numpy matplotlib scipy pandas \
 # Install libraries for LLM fine-tuning
 pip install -q accelerate peft bitsandbytes transformers trl
 
+# install sentence-piece
+mamba install -y -c conda-forge sentencepiece
+
 # Install libraries for clustering
 
