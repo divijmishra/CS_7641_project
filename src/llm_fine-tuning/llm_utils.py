@@ -1,5 +1,6 @@
-
-
+import json
+import os
+import shutil
 
 
 def split_and_save_data(raw_data_path: str):
@@ -15,7 +16,8 @@ def split_and_save_data(raw_data_path: str):
         None
     """
 
-    save_dir_path = os.path.join(raw_data_path, 'split')
+    base_dir = os.path.dirname(raw_data_path)
+    save_dir_path = os.path.join(base_dir, 'split')
     if os.path.exists(save_dir_path):
         shutil.rmtree(save_dir_path)
     os.makedirs(save_dir_path)
@@ -24,7 +26,7 @@ def split_and_save_data(raw_data_path: str):
         for line in f:
             data = json.loads(line)
             split = data.get('split')
-            split_file_path = os.path.join(save_data_path, f"{split}.jsonl")
+            split_file_path = os.path.join(save_dir_path, f"{split}.jsonl")
             with open(split_file_path, 'a', encoding='utf-8') as split_file:
                 split_file.write(json.dumps(data, ensure_ascii=False) + '\n')
 
