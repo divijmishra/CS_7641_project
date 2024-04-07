@@ -3,6 +3,7 @@
 # Retrieve data as per https://github.com/rowanz/grover/tree/master/generation_examples
 # We choose to 
 
+mkdir data/
 mkdir data/raw/
 mkdir models/
 mkdir models/llm_fine-tuning
