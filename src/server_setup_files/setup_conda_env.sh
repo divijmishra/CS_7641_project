@@ -20,3 +20,7 @@ mamba install -y -c conda-forge sentencepiece
 
 # Install libraries for clustering
 
+
+# Install utils
+pip install -e .
+

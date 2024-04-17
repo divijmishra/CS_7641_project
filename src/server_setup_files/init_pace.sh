@@ -18,4 +18,4 @@ while getopts ":g:h:" opt; do
 done
 
 # srun --partition=coc-gpu --gres=gpu:1 -C $gpu -N 1 -t $hours:00:00 --pty $SHELL
-srun --partition=coc-gpu --mem-per-cpu=32G --gres=gpu:1 -C $gpu -N 1 -t $hours:00:00 --pty $SHELL
+srun --partition=coc-gpu --mem-per-cpu=64G --gres=gpu:1 -C $gpu -N 1 -t $hours:00:00 --pty $SHELL

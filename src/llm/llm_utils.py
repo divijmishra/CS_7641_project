@@ -16,8 +16,8 @@ def split_and_save_data(raw_data_path: str):
         None
     """
 
-    base_dir = os.path.dirname(raw_data_path)
-    save_dir_path = os.path.join(base_dir, 'split')
+    base_dir = os.path.dirname(os.path.dirname(raw_data_path))
+    save_dir_path = os.path.join(base_dir, 'splits')
     if os.path.exists(save_dir_path):
         shutil.rmtree(save_dir_path)
     os.makedirs(save_dir_path)
@@ -29,9 +29,6 @@ def split_and_save_data(raw_data_path: str):
             split_file_path = os.path.join(save_dir_path, f"{split}.jsonl")
             with open(split_file_path, 'a', encoding='utf-8') as split_file:
                 split_file.write(json.dumps(data, ensure_ascii=False) + '\n')
-
-
-
     
     
 def load_data_as_lists(data_path: str) -> tuple:
@@ -59,5 +56,6 @@ def load_data_as_lists(data_path: str) -> tuple:
             elif label == 'machine':
                 labels.append(1)
             else:
+                print("Neither human nor machine")
                 labels.append(-1)
     return texts, labels

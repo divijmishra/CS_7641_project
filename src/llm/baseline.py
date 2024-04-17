@@ -1,12 +1,12 @@
 import os
-os.environ['HF_HOME'] = '~/scratch/CS-7641-Project/models/hf_cache'
+os.environ['HF_HOME'] = './models/hf_cache'
 
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 # Load tokenizer and model
 model_name = "meta-llama/Llama-2-7b-hf"
-cache_dir = "~/scratch/CS-7641-Project/models/pretrained/"
+# cache_dir = "~/scratch/CS-7641-Project/models/pretrained/"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 print("Loaded tokenizer.")
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
