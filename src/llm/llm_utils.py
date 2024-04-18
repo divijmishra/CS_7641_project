@@ -1,12 +1,24 @@
 import json
 import os
 import shutil
+from tqdm import tqdm
 
+import numpy as np
+from sklearn.metrics import (
+    accuracy_score, 
+    classification_report, 
+    confusion_matrix
+)
 import torch
+from transformers import (
+    pipeline, 
+)
+
 import bitsandbytes as bnb
 
 
-def split_and_save_data(raw_data_path: str):
+############
+def split_and_save_data(raw_data_path: str, generator, p):
     """
     Takes in the path to the raw data as a .json file, 
     separates them based on whether "split" is train, val, test,
@@ -18,14 +30,15 @@ def split_and_save_data(raw_data_path: str):
     Returns:
         None
     """
-
+    raw_data_file_path = raw_data_path + f"generator={generator}~dataset=p{p}.jsonl"
     base_dir = os.path.dirname(os.path.dirname(raw_data_path))
     save_dir_path = os.path.join(base_dir, 'splits')
+    save_dir_path = os.path.join(save_dir_path, f"generator={generator}~dataset=p{p}")
     if os.path.exists(save_dir_path):
         shutil.rmtree(save_dir_path)
     os.makedirs(save_dir_path)
 
-    with open(raw_data_path, 'r', encoding='utf-8') as f:
+    with open(raw_data_file_path, 'r', encoding='utf-8') as f:
         for line in f:
             data = json.loads(line)
             split = data.get('split')
@@ -33,7 +46,8 @@ def split_and_save_data(raw_data_path: str):
             with open(split_file_path, 'a', encoding='utf-8') as split_file:
                 split_file.write(json.dumps(data, ensure_ascii=False) + '\n')
     
-    
+
+############
 def load_data_as_lists(data_path: str) -> tuple:
     """
     Given the path to a data split, loads the data,
@@ -64,6 +78,7 @@ def load_data_as_lists(data_path: str) -> tuple:
     return texts, labels
 
 
+############
 def truncate_article(text, word_limit):
     """
     LLaMA-2 supports upto 4096 tokens. A basic heuristic is 0.75 tokens per word - let's go with 1.5 tokens per word just to be safe. Our news articles are 1000s of words, with max being 13k. This will truncate the article to the last sentence such that the truncated article has <= word_limit words.
@@ -91,9 +106,12 @@ def truncate_article(text, word_limit):
     return truncated_text
 
 
+############
 def create_prompt(row):
     """
     Creates a text prompt from the given data point.
+    If split="train", the prompt contains the response.
+    If split="val"/"test", the prompt ends before the response.
 
     Args:
         row: Sample from the dataset - entry from the json files.
@@ -105,22 +123,18 @@ def create_prompt(row):
     
     Our news articles are 1000s of words, with max being 13k. Let's truncate to 3000 words, just to be safe.
     """
-    word_limit = 3000
+    word_limit = 800
     text = truncate_article(row['article'], word_limit)
     
     # prompt
-    prompt = f"""### Instructions:
-Your task is to classify an excerpt from a news article as being human-generated or machine-generated. If it was machine-generated, respond with 'machine', else respond with 'human'.
+    prompt = f"""<s>[INST] <<SYS>>
+Your task is to classify an excerpt from a news article as being human-generated or machine-generated. If it was machine-generated, respond with 'machine', else respond with 'human'. Respond with exactly one of "machine" or "human". The excerpt has been provided below.
+<</SYS>>
 
-### Input:
-Classify the following news article excerpt as being human-generated or machine-generated:
-
-{text}
-
-### Response:
-{row['label']}
-### End
-    """
+{text} [/INST]"""
+    
+    if row['split'] == "train":
+        prompt += f" {row['label']} </s><s>"
     
     # store prompt in a new key
     row['text'] = prompt
@@ -128,6 +142,7 @@ Classify the following news article excerpt as being human-generated or machine-
     return row
 
 
+############
 def get_max_length(model):
     """
     Extracts maximum token length from the model configuration.
@@ -150,6 +165,7 @@ def get_max_length(model):
     return max_length
 
 
+############
 def tokenize_text(row, tokenizer, max_length):
     """
     Tokenizes a batch of data.
@@ -162,6 +178,7 @@ def tokenize_text(row, tokenizer, max_length):
     return tokenizer(row["text"], max_length=max_length, padding=True, truncation=True)
 
 
+############
 def print_trainable_parameters(model):
     """
     (Cool utility from a tutorial I found)
@@ -184,3 +201,86 @@ def print_trainable_parameters(model):
     print(
         f"All Parameters: {all_param:,d} || Trainable Parameters: {trainable_params:,d} || Trainable Parameters %: {100 * trainable_params / all_param}"
     )
+
+
+############
+def evaluate_predictions(y_true, y_pred):
+    """
+    Given a list of true and predicted labels ('human'/'machine'), generates various classification metrics
+
+    Args:
+        y_true 
+        y_pred
+    """
+    
+    labels = ['human', 'machine']
+    mapping = {'human': 0, 'machine': 1}
+    
+    # convert to 0/1s
+    def map_func(label):
+        return mapping[label]
+    
+    y_true = np.vectorize(map_func)(y_true)
+    y_pred = np.vectorize(map_func)(y_pred)
+    
+    # calculate accuracy
+    accuracy = accuracy_score(y_true, y_pred)
+    print(f"Accuracy: {accuracy}")
+    
+    # generate classification report
+    clf_report = classification_report(y_true, y_pred)
+    print('\nClassification Report:')
+    print(clf_report)
+    
+    # generate confusion matrix
+    conf_matrix = confusion_matrix(y_true, y_pred, labels=[0, 1])
+    print('\nConfusion Matrix:')
+    print(conf_matrix)
+    
+
+############
+def predict(dataset, model, tokenizer, device, finetuned):
+    """
+    Given a dataset split, evaluate the model on the split.
+    
+    Args:
+        dataset: HF dataset split
+        model
+        tokenizer
+    """
+    y_pred = []
+    
+    for i in tqdm(range(len(dataset))):
+        prompt = dataset[i]["text"]
+        print(prompt)
+        
+        input = tokenizer(prompt, return_tensors="pt").to(device)
+        print(input.input_ids[0, -5:])
+        output = model.generate(
+            **input,
+            max_length = input.input_ids.shape[1] + 5,
+            do_sample=False
+        )
+        print(f"Input length: {input.input_ids.shape}")
+        print(f"Output length: {output[0].shape}")
+        print(output[0][-5:])
+        generated_text = tokenizer.decode(output[0])
+        print(generated_text)
+        answer = generated_text.split("### Response")[-1]
+        if "human" in answer:
+            print("human found")
+            pred="human"
+        elif "machine" in answer:
+            print("machine found")
+            pred="machine"
+        else:
+            print("No valid prediction.")
+            pred="none"
+        y_pred.append(pred)
+        
+        if finetuned:
+            dataset[i]["finetuned_prediction"] = pred
+        else:
+            dataset[i]["pretrained_prediction"] = pred
+        
+    return y_pred

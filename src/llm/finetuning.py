@@ -42,7 +42,8 @@ print(f"Device: {device}")
 data_path = "data/"
 
 MODEL_NAME = "meta-llama/Llama-2-7b-hf"
-MAX_TOKENS = 4096  # for llama-2-7b
+MAX_TOKENS = 1024  
+# max for llama-2-7b is 4096, trying this if it speeds things up
 
 seed = 42
 
@@ -81,10 +82,12 @@ print("Tokenizer loaded.")
 ############ LOADING DATASET
 
 # loading raw dataset
+generator, p = "mega", "0.94"
+partial_path = data_path + f"splits/generator={generator}~dataset=p{p}/"
 data_files = {
-    "train": data_path + "splits/train.jsonl",  # 10k
-    "val" : data_path + "splits/val.jsonl",  # 3k
-    # "test": data_path + "splits/test.jsonl",  # 12k, won't need test data
+    "train": partial_path + "train.jsonl",  # 10k
+    "val" : partial_path + "val.jsonl",  # 3k
+    # "test": partial_path + "test.jsonl",  # 12k, won't need test data
 }
 dataset = load_dataset("json", data_files=data_files)
 print("Dataset loaded.")
@@ -113,6 +116,10 @@ for split in dataset.keys():
     
     # shuffle
     dataset = dataset.shuffle(seed=seed)
+    
+    # sample a tiny bit of val for eval
+    if split == "val":
+        dataset[split] = dataset[split].select(range(50))
     
 print("Dataset preprocessed.")
 
@@ -160,12 +167,12 @@ trainer = Trainer(
         evaluation_strategy="steps",
         eval_steps=2,
         eval_accumulation_steps=10,  # after evaluating 50 validation samples, those values are sent back to CPU from GPU 
-        max_steps=20,
+        max_steps=6,
         learning_rate=2e-4,
         weight_decay=0.001,
         fp16=True,
         logging_steps=1,
-        optim="paged_adamw_8bit",
+        optim="paged_adamw_32bit",
     ),
     data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False)
 )
