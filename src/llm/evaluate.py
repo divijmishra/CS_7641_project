@@ -4,7 +4,11 @@ os.environ['HF_HOME'] = './models/hf_cache'
 
 from functools import partial
 import torch
-from datasets import load_dataset
+from datasets import (
+    load_dataset,
+    disable_caching,
+)
+disable_caching()
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -28,13 +32,14 @@ from peft import (
     AutoPeftModelForCausalLM,
 )
 from llm.llm_utils import (
-    # create_prompt,
+    create_prompt,
     get_max_length,
     tokenize_text,
     print_trainable_parameters,
     predict,
     evaluate_predictions,
 )
+
 print("Imports completed.")
 
 # set device to GPU if available
@@ -44,11 +49,14 @@ print(f"Device: {device}")
 # paths
 data_path = "data/"
 
-finetuned = False
+finetuned = True
 if finetuned == False:
     MODEL_NAME = "meta-llama/Llama-2-7b-hf"
 else:
-    MODEL_NAME = None
+    train_sample, num_epochs = 2500, 4
+    MODEL_NAME = f"./results/train_{train_sample}_epochs_{num_epochs}"
+    # MODEL_NAME = f"./results/final"
+print(f"MODEL_NAME: {MODEL_NAME}")
 MAX_TOKENS = 1024  
 # max for llama-2-7b is 4096, trying this if it speeds things up
 
@@ -119,7 +127,7 @@ for split in dataset.keys():
     
     # sample a tiny bit of val for eval
     if split in ["val", "test"]:
-        dataset[split] = dataset[split].select(range(10))
+        dataset[split] = dataset[split].select(range(100))
     
 print("Dataset preprocessed.")
 

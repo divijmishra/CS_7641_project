@@ -4,7 +4,11 @@ os.environ['HF_HOME'] = './models/hf_cache'
 
 from functools import partial
 import torch
-from datasets import load_dataset
+from datasets import (
+    load_dataset,
+    disable_caching,
+)
+disable_caching()
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -47,6 +51,16 @@ MAX_TOKENS = 1024
 
 seed = 42
 
+############
+train_sample, num_epochs = 2000, 5
+print(f"Train sample: {train_sample}, num_epochs: {num_epochs}")
+############
+
+# for the output model
+output_dir = "results/"
+output_merged_dir = f"results/train_{train_sample}_epochs_{num_epochs}"
+
+
 
 ############ LOADING THE QUANTIZED MODEL
 
@@ -86,7 +100,7 @@ generator, p = "mega", "0.94"
 partial_path = data_path + f"splits/generator={generator}~dataset=p{p}/"
 data_files = {
     "train": partial_path + "train.jsonl",  # 10k
-    "val" : partial_path + "val.jsonl",  # 3k
+    # "val" : partial_path + "val.jsonl",  # 3k
     # "test": partial_path + "test.jsonl",  # 12k, won't need test data
 }
 dataset = load_dataset("json", data_files=data_files)
@@ -117,9 +131,8 @@ for split in dataset.keys():
     # shuffle
     dataset = dataset.shuffle(seed=seed)
     
-    # sample a tiny bit of val for eval
-    if split == "val":
-        dataset[split] = dataset[split].select(range(50))
+    # sampling only 1k training data due to time constraints
+    dataset[split] = dataset[split].select(range(train_sample))
     
 print("Dataset preprocessed.")
 
@@ -157,22 +170,21 @@ print_trainable_parameters(model)
 trainer = Trainer(
     model=model,
     train_dataset=dataset["train"],  # it automatically infers that the relevant tokens are in dataset["train"]["input_ids"]
-    eval_dataset=dataset["val"],
+    # eval_dataset=dataset["val"],
     args=TrainingArguments(
-        output_dir = "./results",
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=1,
-        gradient_accumulation_steps=4,
+        output_dir=output_dir,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=1,
         warmup_steps=2,
-        evaluation_strategy="steps",
-        eval_steps=2,
-        eval_accumulation_steps=10,  # after evaluating 50 validation samples, those values are sent back to CPU from GPU 
-        max_steps=6,
-        learning_rate=2e-4,
+        num_train_epochs=num_epochs,
+        # learning_rate=2e-4,
         weight_decay=0.001,
         fp16=True,
-        logging_steps=1,
+        logging_steps=25,
         optim="paged_adamw_32bit",
+        max_grad_norm=0.3,
+        # lr_scheduler_type="cosine",
+        
     ),
     data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False)
 )
@@ -181,11 +193,11 @@ trainer = Trainer(
 print("Training...")
 train_result = trainer.train(),
 print("Training finished.")
-metrics = train_result.metrics
-trainer.log_metrics("train", metrics)
-trainer.save_metrics("train", metrics)
-trainer.save_state()
-print(metrics)
+# metrics = train_result.metrics
+# trainer.log_metrics("train", metrics)
+# trainer.save_metrics("train", metrics)
+# trainer.save_state()
+# print(metrics)
 
 # save model
 os.makedirs(output_dir, exist_ok=True)
@@ -197,9 +209,27 @@ del trainer
 torch.cuda.empty_cache()
 
 
-############ PUSH FINE-TUNED MODEL
+############ MERGE AND PUSH FINE-TUNED MODEL
 
+# merge LoRA adapters into the model
+model = AutoPeftModelForCausalLM.from_pretrained(
+    output_dir, device_map="auto", torch_dtype=torch.bfloat16
+)
+model = model.merge_and_unload()
 
+# save fine-tuned model
+output_merged_dir = output_merged_dir
+os.makedirs(output_merged_dir, exist_ok=True)
+model.save_pretrained(output_merged_dir, safe_serialization=True)
 
+# save tokenizer for easy inference
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+tokenizer.save_pretrained(output_merged_dir)
 
+# fine-tuned model name on Hugging Face Hub
+new_model = "divijmishra/grover-base-p1.00-llama-2-7b"
+
+# # push fine-tuned model and tokenizer to Hugging Face Hub
+# model.push_to_hub(new_model, use_auth_token=True)
+# tokenizer.push_to_hub(new_model, use_auth_token=True)
 

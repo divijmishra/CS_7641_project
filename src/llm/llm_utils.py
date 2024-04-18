@@ -125,17 +125,25 @@ def create_prompt(row):
     """
     word_limit = 800
     text = truncate_article(row['article'], word_limit)
-    
-    # prompt
-    prompt = f"""<s>[INST] <<SYS>>
-Your task is to classify an excerpt from a news article as being human-generated or machine-generated. If it was machine-generated, respond with 'machine', else respond with 'human'. Respond with exactly one of "machine" or "human". The excerpt has been provided below.
-<</SYS>>
 
-{text} [/INST]"""
-    
     if row['split'] == "train":
-        prompt += f" {row['label']} </s><s>"
+        label = f"{row['label']}"
+    else:
+        label = ""
+
+    prompt = f"""
+    Classify the news excerpt enclosed between <input></input> tags as being written by a human or machine. Return the answer as the corresponding label "human" or "machine". You may refer to the example below:
     
+    Example start.
+    <input>Sample excerpt from a news article.</input> 
+    Output: machine
+    Example end.
+    
+    Please classify the following news excerpt:
+    
+    <input>{text}</input> 
+    Output: {label}"""
+
     # store prompt in a new key
     row['text'] = prompt
     
@@ -252,35 +260,38 @@ def predict(dataset, model, tokenizer, device, finetuned):
     
     for i in tqdm(range(len(dataset))):
         prompt = dataset[i]["text"]
-        print(prompt)
+        # print(prompt)
         
         input = tokenizer(prompt, return_tensors="pt").to(device)
-        print(input.input_ids[0, -5:])
+        # print(input.input_ids[0, -5:])
         output = model.generate(
             **input,
             max_length = input.input_ids.shape[1] + 5,
             do_sample=False
         )
-        print(f"Input length: {input.input_ids.shape}")
-        print(f"Output length: {output[0].shape}")
-        print(output[0][-5:])
+        # print(f"Input length: {input.input_ids.shape}")
+        # print(f"Output length: {output[0].shape}")
+        # print(output[0][-5:])
         generated_text = tokenizer.decode(output[0])
-        print(generated_text)
-        answer = generated_text.split("### Response")[-1]
+        # print(generated_text)
+        answer = generated_text.split("Output:")[-1]
         if "human" in answer:
-            print("human found")
+            # print("human found")
             pred="human"
         elif "machine" in answer:
-            print("machine found")
+            # print("machine found")
             pred="machine"
         else:
-            print("No valid prediction.")
-            pred="none"
+            # print("No valid prediction.")
+            pred="human"  # by default, model should assume it's a human
         y_pred.append(pred)
         
         if finetuned:
             dataset[i]["finetuned_prediction"] = pred
         else:
             dataset[i]["pretrained_prediction"] = pred
+        
+        del input
+        del output
         
     return y_pred
