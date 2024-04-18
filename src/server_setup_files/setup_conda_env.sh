@@ -10,10 +10,10 @@ mamba install -y pytorch torchvision torchaudio pytorch-cuda=12.1 \
 
 # Install some other usual libraries
 mamba install -y -c conda-forge numpy matplotlib scipy pandas \
-    scikit-learn ipykernel jupyter notebook 
+    scikit-learn ipykernel jupyter notebook pytest
 
 # Install libraries for LLM fine-tuning
-pip install -q accelerate peft bitsandbytes transformers trl
+mamba install -y accelerate peft bitsandbytes transformers trl
 
 # install sentence-piece
 mamba install -y -c conda-forge sentencepiece
