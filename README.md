@@ -1,5 +1,6 @@
 # CS 7641 Project
-Repository for CS 7641 project group 46, Spring 2024.
+Repository for CS 7641 project group 46, Spring 2024. \
+You can find our project report at https://parth1902.github.io/cs7641-project-group-46/.
 
 To finetune LLaMA-2:
 1. Clone this repo. 
